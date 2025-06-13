@@ -1,5 +1,9 @@
 import React, { useState, useEffect } from "react";
-import { activityZones, itemEffects } from "../utils/gameData";
+import {
+  activityZones,
+  itemEffects,
+  calculateLifeSatisfaction,
+} from "../utils/gameData";
 
 const SpecificAreaStage = ({
   area,
@@ -18,18 +22,47 @@ const SpecificAreaStage = ({
   const [fastForward, setFastForward] = useState(false);
   const [currentActivity, setCurrentActivity] = useState(null);
   const [spawnedItem, setSpawnedItem] = useState(null);
+  const [showShop, setShowShop] = useState(false);
+  const [shopItems, setShopItems] = useState([]);
+  const [isUsingItem, setIsUsingItem] = useState(false);
 
   useEffect(() => {
-    console.log("SpecificAreaStage props:", {
+    console.log("SpecificAreaStage mounted with props:", {
       area,
       player,
       areaDetails,
       areaActivities,
+      activityZones: activityZones[area],
+      stats,
+      visitedAreas,
     });
     if (!visitedAreas.includes(area)) {
+      console.log("Adding area to visitedAreas:", area);
       setVisitedAreas([...visitedAreas, area]);
     }
-  }, [area, visitedAreas, setVisitedAreas]);
+    if (!activityZones[area]) {
+      console.warn("No activity zones defined for area:", area);
+    }
+    if (!areaActivities || areaActivities.length === 0) {
+      console.warn("No activities defined for area:", area);
+    }
+    if (
+      !stats.lifeSatisfaction ||
+      !stats.lifeSatisfaction.details ||
+      typeof Number(stats.lifeSatisfaction.details["Stat Balance"]) !==
+        "number" ||
+      isNaN(Number(stats.lifeSatisfaction.details["Stat Balance"]))
+    ) {
+      console.warn("Invalid stats.lifeSatisfaction, recalculating...");
+      setStats((prev) => ({
+        ...prev,
+        lifeSatisfaction: calculateLifeSatisfaction(
+          prev,
+          Array.isArray(visitedAreas) ? visitedAreas : []
+        ),
+      }));
+    }
+  }, [area, visitedAreas, setVisitedAreas, areaActivities, stats, setStats]);
 
   const checkCollision = (x, y, target) => {
     if (!target) return false;
@@ -63,121 +96,291 @@ const SpecificAreaStage = ({
     newX = Math.max(0, Math.min(newX, 1000));
     newY = Math.max(0, Math.min(newY, 600));
     setPosition({ x: newX, y: newY });
-    collectSpawnedItem();
+    console.log("Player moved to:", { x: newX, y: newY });
+    if (!showShop) {
+      collectSpawnedItem();
+    }
+  };
+
+  const getActivityName = (zoneName) => {
+    const zoneToActivityMap = {
+      "Sleep Spot": "Sleep",
+      "Relax Spot": "Relax",
+      "Swim Spot": "Swim",
+      "Fish Spot": "Fish",
+      "Work Spot": "Work",
+      "Gather Spot": "Gather",
+      "Coconut Stand": "Coconut Stand",
+      "Rest Area": "Rest Area",
+      Shop: "Shop",
+    };
+    return zoneToActivityMap[zoneName] || zoneName;
   };
 
   const startActivity = (activityName) => {
     if (isActivityRunning) return;
+    console.log(
+      "Attempting to start activity:",
+      activityName,
+      "in area:",
+      area
+    );
     const selectedActivity = areaActivities.find(
       (a) => a.name === activityName
     );
     const zone = activityZones[area]?.find(
-      (z) => z.name === `${activityName} Spot` || z.name === activityName
+      (z) => getActivityName(z.name) === activityName
     );
-    const requiredItems = areaDetails?.lockedActivities?.[activityName];
+    const requiredItems =
+      areaDetails?.lockedActivities?.[activityName] ||
+      selectedActivity?.requiredItems;
 
     if (!selectedActivity) {
-      alert("Aktivitas tidak ditemukan!");
+      console.error("Activity not found:", activityName);
+      alert("Aktivitas tidak ditemukan! Bocchi panik...");
       return;
     }
     if (
       requiredItems &&
       !requiredItems.every((item) => stats.Items.includes(item))
     ) {
-      alert("Butuh item untuk membuka aktivitas ini!");
+      console.warn(
+        "Missing required items for",
+        activityName,
+        ":",
+        requiredItems
+      );
+      alert("Butuh item untuk membuka aktivitas ini! Bocchi sedih...");
       return;
     }
     if (!zone || !checkCollision(position.x, position.y, [zone])) {
-      alert("Kamu harus berada di zona aktivitas yang benar!");
+      console.warn(
+        "Player not in correct zone for",
+        activityName,
+        "Zone:",
+        zone
+      );
+      alert("Kamu harus berada di zona aktivitas yang benar! Bocchi panik...");
       return;
     }
     if (stats.Money < selectedActivity.cost) {
+      console.warn(
+        "Insufficient money for",
+        activityName,
+        "Cost:",
+        selectedActivity.cost
+      );
       alert("Uang tidak cukup! Bocchi panik...");
       return;
     }
 
-    setIsActivityRunning(true);
-    setCurrentActivity(activityName);
-    setStats((prev) => ({
-      ...prev,
-      Money: prev.Money - selectedActivity.cost,
-      activitiesPerformed: (prev.activitiesPerformed || 0) + 1,
-    }));
+    if (activityName === "Shop") {
+      console.log("Opening shop with items:", selectedActivity.shopItems);
+      setShowShop(true);
+      setShopItems(selectedActivity.shopItems || []);
+      return;
+    }
 
-    let progress = 0;
-    const totalDuration = selectedActivity.duration || 2000;
-    const intervalSpeed = fastForward ? 20 : 40;
-    const statDecreaseRate = fastForward ? 2 : 1;
+    try {
+      setIsActivityRunning(true);
+      setCurrentActivity(activityName);
+      setStats((prev) => ({
+        ...prev,
+        Money: prev.Money - selectedActivity.cost,
+        activitiesPerformed: (prev.activitiesPerformed || 0) + 1,
+      }));
 
-    const interval = setInterval(() => {
-      progress += 5;
-      setActivityProgress(progress);
+      let progress = 0;
+      const totalDuration = selectedActivity.duration || 2000;
+      const intervalSpeed = fastForward ? 20 : 40;
+      const statDecreaseRate = fastForward ? 2 : 1;
 
-      if (progress % 50 === 0) {
-        setStats((prev) => ({
-          ...prev,
-          Sleep: Math.max(0, prev.Sleep - statDecreaseRate),
-          Happiness: Math.max(0, prev.Happiness - statDecreaseRate),
-        }));
-      }
+      const interval = setInterval(() => {
+        progress += 5;
+        setActivityProgress(progress);
 
-      if (progress >= 100) {
-        clearInterval(interval);
-        setStats((prev) => {
-          const newStats = {
+        if (progress % 50 === 0) {
+          setStats((prev) => ({
             ...prev,
-            Meal: Math.min(
-              100,
-              Math.max(0, prev.Meal + (selectedActivity.statChanges.Meal || 0))
-            ),
-            Sleep: Math.min(
-              100,
-              Math.max(
-                0,
-                prev.Sleep + (selectedActivity.statChanges.Sleep || 0)
-              )
-            ),
-            Happiness: Math.min(
-              100,
-              Math.max(
-                0,
-                prev.Happiness + (selectedActivity.statChanges.Happiness || 0)
-              )
-            ),
-            Cleanliness: Math.min(
-              100,
-              Math.max(
-                0,
-                prev.Cleanliness +
-                  (selectedActivity.statChanges.Cleanliness || 0)
-              )
-            ),
-            Money: prev.Money + (selectedActivity.statChanges.Money || 0),
-            Items: selectedActivity.itemsGained
-              ? [...prev.Items, ...selectedActivity.itemsGained]
-              : prev.Items,
-          };
-          return newStats;
-        });
-        setIsActivityRunning(false);
-        setActivityProgress(0);
-        setFastForward(false);
-        setCurrentActivity(null);
-      }
-    }, intervalSpeed);
+            Sleep: Math.max(0, prev.Sleep - statDecreaseRate),
+            Happiness: Math.max(0, prev.Happiness - statDecreaseRate),
+          }));
+        }
+
+        if (progress >= 100) {
+          clearInterval(interval);
+          setStats((prev) => {
+            const newStats = {
+              ...prev,
+              Meal: Math.min(
+                100,
+                Math.max(
+                  0,
+                  prev.Meal + (selectedActivity.statChanges?.Meal || 0)
+                )
+              ),
+              Sleep: Math.min(
+                100,
+                Math.max(
+                  0,
+                  prev.Sleep + (selectedActivity.statChanges?.Sleep || 0)
+                )
+              ),
+              Happiness: Math.min(
+                100,
+                Math.max(
+                  0,
+                  prev.Happiness +
+                    (selectedActivity.statChanges?.Happiness || 0)
+                )
+              ),
+              Cleanliness: Math.min(
+                100,
+                Math.max(
+                  0,
+                  prev.Cleanliness +
+                    (selectedActivity.statChanges?.Cleanliness || 0)
+                )
+              ),
+              Money: prev.Money + (selectedActivity.statChanges?.Money || 0),
+              Items: selectedActivity.itemsGained
+                ? [...prev.Items, ...selectedActivity.itemsGained]
+                : prev.Items,
+              lifeSatisfaction: calculateLifeSatisfaction(
+                {
+                  ...prev,
+                  Meal: Math.min(
+                    100,
+                    Math.max(
+                      0,
+                      prev.Meal + (selectedActivity.statChanges?.Meal || 0)
+                    )
+                  ),
+                  Sleep: Math.min(
+                    100,
+                    Math.max(
+                      0,
+                      prev.Sleep + (selectedActivity.statChanges?.Sleep || 0)
+                    )
+                  ),
+                  Happiness: Math.min(
+                    100,
+                    Math.max(
+                      0,
+                      prev.Happiness +
+                        (selectedActivity.statChanges?.Happiness || 0)
+                    )
+                  ),
+                  Cleanliness: Math.min(
+                    100,
+                    Math.max(
+                      0,
+                      prev.Cleanliness +
+                        (selectedActivity.statChanges?.Cleanliness || 0)
+                    )
+                  ),
+                  Money:
+                    prev.Money + (selectedActivity.statChanges?.Money || 0),
+                  Items: selectedActivity.itemsGained
+                    ? [...prev.Items, ...selectedActivity.itemsGained]
+                    : prev.Items,
+                },
+                Array.isArray(visitedAreas) ? visitedAreas : []
+              ),
+            };
+            console.log(
+              "Activity completed:",
+              activityName,
+              "New stats:",
+              newStats
+            );
+            return newStats;
+          });
+          setIsActivityRunning(false);
+          setActivityProgress(0);
+          setFastForward(false);
+          setCurrentActivity(null);
+        }
+      }, intervalSpeed);
+    } catch (error) {
+      console.error("Error in startActivity:", error);
+      alert("Terjadi kesalahan saat menjalankan aktivitas! Bocchi panik...");
+      setIsActivityRunning(false);
+      setCurrentActivity(null);
+      setActivityProgress(0);
+      setFastForward(false);
+    }
+  };
+
+  const buyItem = (itemName, itemCost) => {
+    if (stats.Money < itemCost) {
+      console.warn("Insufficient money to buy", itemName, "Cost:", itemCost);
+      alert("Uang tidak cukup untuk membeli item ini! Bocchi sedih...");
+      return;
+    }
+    console.log("Buying item:", itemName);
+    setStats((prev) => {
+      const newStats = {
+        ...prev,
+        Money: prev.Money - itemCost,
+        Items: [...prev.Items, itemName],
+        lifeSatisfaction: calculateLifeSatisfaction(
+          {
+            ...prev,
+            Money: prev.Money - itemCost,
+            Items: [...prev.Items, itemName],
+          },
+          Array.isArray(visitedAreas) ? visitedAreas : []
+        ),
+      };
+      return newStats;
+    });
+    setShowShop(false);
   };
 
   const fastForwardActivity = () => {
     if (!isActivityRunning) return;
+    console.log("Fast forwarding activity:", currentActivity);
     setFastForward(true);
   };
 
   const useItem = (itemName) => {
+    if (isUsingItem) return;
+    setIsUsingItem(true);
+    console.log(
+      "Attempting to use item:",
+      itemName,
+      "Current inventory:",
+      stats.Items
+    );
+
     const itemEffect = itemEffects[itemName];
-    if (!itemEffect || !stats.Items.includes(itemName)) {
-      alert("Item tidak ditemukan di inventori!");
+    if (!itemEffect) {
+      console.error(
+        `Item effect not found for ${itemName}. Available effects:`,
+        itemEffects
+      );
+      alert(`Efek untuk item "${itemName}" tidak ditemukan! Bocchi bingung...`);
+      setIsUsingItem(false);
       return;
     }
+    if (!stats.Items.includes(itemName)) {
+      console.error(`Item ${itemName} not found in inventory:`, stats.Items);
+      alert(`Item "${itemName}" tidak ada di inventori! Bocchi bingung...`);
+      setIsUsingItem(false);
+      return;
+    }
+
+    if (itemEffect.unlocks) {
+      console.log(
+        `Item ${itemName} is used to unlock activities:`,
+        itemEffect.unlocks
+      );
+      alert(`Item "${itemName}" digunakan untuk membuka aktivitas tertentu!`);
+      setIsUsingItem(false);
+      return;
+    }
+
     setStats((prev) => {
       const newStats = {
         ...prev,
@@ -203,12 +406,49 @@ const SpecificAreaStage = ({
             (prev.Cleanliness || 0) + (itemEffect.statChanges?.Cleanliness || 0)
           )
         ),
-        Items: prev.Items.filter((i) => i !== itemName),
+        Items: [...prev.Items].filter((i) => i !== itemName),
         totalItemsUsed: (prev.totalItemsUsed || 0) + 1,
+        lifeSatisfaction: calculateLifeSatisfaction(
+          {
+            ...prev,
+            Meal: Math.min(
+              100,
+              Math.max(
+                0,
+                (prev.Meal || 0) + (itemEffect.statChanges?.Meal || 0)
+              )
+            ),
+            Sleep: Math.min(
+              100,
+              Math.max(
+                0,
+                (prev.Sleep || 0) + (itemEffect.statChanges?.Sleep || 0)
+              )
+            ),
+            Happiness: Math.min(
+              100,
+              Math.max(
+                0,
+                (prev.Happiness || 0) + (itemEffect.statChanges?.Happiness || 0)
+              )
+            ),
+            Cleanliness: Math.min(
+              100,
+              Math.max(
+                0,
+                (prev.Cleanliness || 0) +
+                  (itemEffect.statChanges?.Cleanliness || 0)
+              )
+            ),
+            Items: [...prev.Items].filter((i) => i !== itemName),
+            totalItemsUsed: (prev.totalItemsUsed || 0) + 1,
+          },
+          Array.isArray(visitedAreas) ? visitedAreas : []
+        ),
       };
-      if (itemEffect.unlocks) {
-        console.log(`Unlocked activities for ${itemName}:`, itemEffect.unlocks);
-      }
+      console.log(`Item ${itemName} used, Updated stats:`, newStats);
+      alert(`Item "${itemName}" digunakan! Stats diperbarui.`);
+      setIsUsingItem(false);
       return newStats;
     });
   };
@@ -218,72 +458,76 @@ const SpecificAreaStage = ({
       spawnedItem &&
       Math.sqrt(
         (position.x - spawnedItem.x) ** 2 + (position.y - spawnedItem.y) ** 2
-      ) < 20
+      ) < 30
     ) {
-      setStats((prev) => ({
-        ...prev,
-        Items: [...prev.Items, "Broken Apple"],
-      }));
+      console.log("Collected item: Broken Apple at", {
+        playerPos: position,
+        itemPos: spawnedItem,
+      });
+      setStats((prev) => {
+        const newStats = {
+          ...prev,
+          Items: [...prev.Items, "Broken Apple"],
+          lifeSatisfaction: calculateLifeSatisfaction(
+            {
+              ...prev,
+              Items: [...prev.Items, "Broken Apple"],
+            },
+            Array.isArray(visitedAreas) ? visitedAreas : []
+          ),
+        };
+        return newStats;
+      });
       setSpawnedItem(null);
+    } else if (spawnedItem) {
+      console.log("No collision: Player at", position, "Item at", spawnedItem);
     }
-  };
-
-  const calculateLifeSatisfaction = () => {
-    const statBalance =
-      (stats.Meal + stats.Sleep + stats.Happiness + stats.Cleanliness) / 4;
-    const activityBonus = (stats.activitiesPerformed || 0) * 10;
-    const itemCollectedBonus = stats.Items.length * 5;
-    const itemUsedBonus = (stats.totalItemsUsed || 0) * 10;
-    const areaVarietyBonus = new Set(visitedAreas).size * 7;
-    return Math.ceil(
-      statBalance +
-        activityBonus +
-        itemCollectedBonus +
-        itemUsedBonus +
-        areaVarietyBonus
-    );
   };
 
   useEffect(() => {
     window.addEventListener("keydown", handleKeyDown);
 
-    // Depleksi stats alami
     const statDepletionInterval = setInterval(() => {
-      if (!isActivityRunning) {
-        console.log("Depleting stats in SpecificAreaStage");
-        setStats((prev) => ({
+      console.log("Depleting stats in SpecificAreaStage");
+      setStats((prev) => {
+        const newStats = {
           ...prev,
-          Meal: Math.max(0, prev.Meal - 5),
-          Sleep: Math.max(0, prev.Sleep - 5),
-          Happiness: Math.max(0, prev.Happiness - 5),
-          Cleanliness: Math.max(0, prev.Cleanliness - 5),
-        }));
-      }
-    }, 5000); // Setiap 5 detik
+          Meal: Math.max(0, prev.Meal - 1),
+          Sleep: Math.max(0, prev.Sleep - 1),
+          Happiness: Math.max(0, prev.Happiness - 1),
+          Cleanliness: Math.max(0, prev.Cleanliness - 1),
+          lifeSatisfaction: calculateLifeSatisfaction(
+            {
+              ...prev,
+              Meal: Math.max(0, prev.Meal - 1),
+              Sleep: Math.max(0, prev.Sleep - 1),
+              Happiness: Math.max(0, prev.Happiness - 1),
+              Cleanliness: Math.max(0, prev.Cleanliness - 1),
+            },
+            Array.isArray(visitedAreas) ? visitedAreas : []
+          ),
+        };
+        return newStats;
+      });
+    }, 2000); // Changed from 5000 to 2000 ms (2 seconds)
 
     const spawnInterval = setInterval(() => {
-      if (!spawnedItem && Math.random() < 0.01) {
-        setSpawnedItem({
+      if (!spawnedItem && Math.random() < 0.1) {
+        const newItem = {
           x: Math.random() * 1000,
           y: Math.random() * 600,
-        });
+        };
+        setSpawnedItem(newItem);
+        console.log("Spawned item at", newItem);
       }
-    }, 1000);
-
-    const timer = setInterval(() => {
-      setStats((prev) => ({
-        ...prev,
-        lifeSatisfaction: calculateLifeSatisfaction(),
-      }));
     }, 1000);
 
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
       clearInterval(statDepletionInterval);
       clearInterval(spawnInterval);
-      clearInterval(timer);
     };
-  }, [position, isActivityRunning, spawnedItem, visitedAreas]);
+  }, [position, isActivityRunning, spawnedItem, stats, setStats, visitedAreas]);
 
   const currentTime = new Date().toLocaleString("en-US", {
     weekday: "long",
@@ -294,6 +538,11 @@ const SpecificAreaStage = ({
     minute: "2-digit",
     timeZone: "Asia/Jakarta",
   });
+
+  const formatScoreValue = (value) => {
+    const num = Number(value);
+    return Number.isFinite(num) ? num.toFixed(1) : "0.0";
+  };
 
   return (
     <div className="h-screen flex flex-col bg-gray-100">
@@ -312,18 +561,24 @@ const SpecificAreaStage = ({
           }
         `}
       </style>
-      {/* Header */}
       <div className="p-4 bg-white shadow-md flex justify-between items-center">
         <div className="text-pink-600">
           Good Morning, {player?.name || "Player"}
         </div>
         <div className="text-pink-600">{currentTime}</div>
         <div className="text-pink-600 flex items-center gap-2">
-          Money: ${stats.Money}
+          Money: ${stats.Money || 0}
           <button
             className="px-2 py-1 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-all duration-200 text-sm"
-            onClick={onReturn}
-            disabled={isActivityRunning}
+            onClick={() => {
+              console.log("Back button clicked, calling onReturn");
+              try {
+                onReturn();
+              } catch (error) {
+                console.error("Error clicking back button:", error);
+              }
+            }}
+            disabled={isActivityRunning || showShop}
           >
             Back
           </button>
@@ -338,14 +593,13 @@ const SpecificAreaStage = ({
         </div>
       </div>
 
-      {/* Stats Panel */}
       <div className="absolute top-[100px] left-2 w-1/6 max-w-xs bg-white p-4 rounded-lg shadow-md">
         <h2 className="text-lg font-bold text-pink-600 mb-2">Stats</h2>
         {["Meal", "Sleep", "Happiness", "Cleanliness"].map((stat) => (
           <div key={stat} className="mb-2">
             <div className="flex justify-between">
-              <span>{stat}:</span>
-              <span className="text-pink-600">{stats[stat]}</span>
+              <span className="text-gray-800">{stat}:</span>
+              <span className="text-pink-600">{stats[stat] || 0}</span>
             </div>
             <div className="w-full bg-gray-200 rounded-full h-4">
               <div
@@ -358,22 +612,39 @@ const SpecificAreaStage = ({
                     ? "bg-yellow-600"
                     : "bg-purple-600"
                 }`}
-                style={{ width: `${stats[stat]}%` }}
+                style={{ width: `${stats[stat] || 0}%` }}
               ></div>
             </div>
           </div>
         ))}
       </div>
 
-      {/* Score Display */}
       <div className="absolute top-[340px] left-2 w-1/6 max-w-xs bg-white p-4 rounded-lg shadow-md">
         <h2 className="text-lg font-bold text-pink-600 mb-2">Score</h2>
-        <p className="text-pink-600">
-          Life Satisfaction: {stats.lifeSatisfaction || 0}
+        <p className="text-pink-600 font-semibold">
+          Life Satisfaction: {stats.lifeSatisfaction?.total || 0}
         </p>
+        <div className="text-sm text-gray-800 mt-2">
+          <p>
+            Stat Balance:{" "}
+            {formatScoreValue(
+              stats.lifeSatisfaction?.details?.["Stat Balance"]
+            )}
+          </p>
+          <p>Activities: {stats.lifeSatisfaction?.details?.Activities || 0}</p>
+          <p>
+            Items Collected & Used:{" "}
+            {formatScoreValue(
+              stats.lifeSatisfaction?.details?.["Items Collected & Used"]
+            )}
+          </p>
+          <p>
+            Area Variety:{" "}
+            {stats.lifeSatisfaction?.details?.["Area Variety"] || 0}
+          </p>
+        </div>
       </div>
 
-      {/* Game Arena */}
       <div className="flex flex-1 h-[calc(100vh-64px)] items-stretch justify-center">
         <div className="w-1/6 max-w-xs"></div>
         <div className="flex-1 flex flex-col justify-center items-center">
@@ -439,7 +710,7 @@ const SpecificAreaStage = ({
         <h2 className="text-lg font-bold text-pink-600 mb-2">Player's Items</h2>
         <ul className="list-none pl-0 text-black">
           {stats.Items.map((item, index) => (
-            <li key={index} className="flex items-center mb-1">
+            <li key={`${item}-${index}`} className="flex items-center mb-1">
               <span className="mr-2">
                 {item === "Pegasus Apple"
                   ? "🐴🍎"
@@ -449,12 +720,14 @@ const SpecificAreaStage = ({
                   ? "🎣"
                   : "👶"}
               </span>
-              <button
-                className="px-1 py-0.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-all duration-200 text-xs"
-                onClick={() => useItem(item)}
-              >
-                Use
-              </button>
+              {item !== "Fishing Rod" && (
+                <button
+                  className="px-1 py-0.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-all duration-200 text-xs"
+                  onClick={() => useItem(item)}
+                >
+                  Use
+                </button>
+              )}
               <span className="ml-2">{item}</span>
             </li>
           ))}
@@ -462,7 +735,6 @@ const SpecificAreaStage = ({
         </ul>
       </div>
 
-      {/* Area Info Panel */}
       {areaDetails && (
         <div className="absolute top-[60%] left-[73%] w-1/4 bg-yellow-100 p-4 rounded-lg shadow-md">
           <h2 className="text-xl font-bold text-pink-600 mb-2">{area}</h2>
@@ -470,8 +742,40 @@ const SpecificAreaStage = ({
         </div>
       )}
 
-      {/* Activity Buttons */}
+      {showShop && (
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-yellow-100 p-6 rounded-lg shadow-md z-10">
+          <h3 className="text-lg font-bold text-pink-600 mb-4">
+            Toko Kessoku Band
+          </h3>
+          {shopItems.length > 0 ? (
+            <ul className="list-none pl-0">
+              {shopItems.map((item, index) => (
+                <li key={index} className="flex items-center mb-2">
+                  <span className="mr-2">{item.name}</span>
+                  <button
+                    className="px-2 py-1 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-all duration-200 text-sm"
+                    onClick={() => buyItem(item.name, item.cost)}
+                    disabled={stats.Money < item.cost}
+                  >
+                    Beli (${item.cost})
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-pink-600">Tidak ada item di toko ini!</p>
+          )}
+          <button
+            className="mt-4 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-all duration-200"
+            onClick={() => setShowShop(false)}
+          >
+            Tutup Toko
+          </button>
+        </div>
+      )}
+
       {activityZones[area] &&
+        !showShop &&
         activityZones[area].map(
           (zone) =>
             checkCollision(position.x, position.y, [zone]) && (
@@ -483,17 +787,20 @@ const SpecificAreaStage = ({
                   {zone.name}
                 </h3>
                 <button
-                  onClick={() => startActivity(zone.name.replace(" Spot", ""))}
+                  onClick={() => {
+                    const activityName = getActivityName(zone.name);
+                    console.log("Starting activity via button:", activityName);
+                    startActivity(activityName);
+                  }}
                   className="px-4 py-2 bg-pink-500 text-white rounded-lg hover:bg-pink-600 transition-all duration-200"
                   disabled={isActivityRunning}
                 >
-                  Start {zone.name.replace(" Spot", "")}
+                  Start {getActivityName(zone.name)}
                 </button>
               </div>
             )
         )}
 
-      {/* Activity Progress */}
       {isActivityRunning && (
         <div className="absolute bottom-20 left-4 bg-pink-200 text-pink-600 p-2 rounded-lg shadow-md">
           <div

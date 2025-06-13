@@ -1,113 +1,179 @@
 export const areas = [
-  { name: "Home", x: 100, y: 100, radius: 50 },
   { name: "Beach", x: 700, y: 150, radius: 50 },
-  { name: "City", x: 600, y: 450, radius: 50 },
-  { name: "Forest", x: 200, y: 500, radius: 50 },
+  { name: "Home", x: 300, y: 150, radius: 50 },
+  { name: "City", x: 500, y: 400, radius: 50 },
+  { name: "Forest", x: 200, y: 400, radius: 50 },
 ];
 
 export const areaDetails = {
-  Home: {
-    description: "Rumah nyaman Bocchi untuk bersantai.",
-    activities: ["Sleep", "Relax"],
-  },
   Beach: {
-    description: "Pantai indah untuk berenang dengan Kessoku Band.",
-    activities: ["Swim", "Eat"],
+    description: "Pantai yang indah dengan pasir putih dan ombak yang tenang.",
     lockedActivities: { Fish: ["Fishing Rod"] },
   },
+  Home: {
+    description: "Rumah yang nyaman untuk beristirahat dan bersantai.",
+    lockedActivities: {},
+  },
   City: {
-    description: "Kota modern untuk belanja peralatan musik.",
-    activities: ["Shop", "Work"],
+    description: "Kota yang sibuk dengan banyak toko dan aktivitas.",
+    lockedActivities: {},
   },
   Forest: {
-    description: "Hutan lebat untuk meditasi bersama Nijika.",
-    activities: ["Rest", "Gather"],
+    description: "Hutan lebat yang penuh dengan petualangan.",
+    lockedActivities: { Gather: ["Pegasus Apple"] },
   },
 };
 
-export const areaActivities = {
-  Home: [
-    {
-      name: "Sleep",
-      cost: 0,
-      statChanges: { Sleep: 30, Cleanliness: -5 },
-      duration: 2000,
-    },
-    { name: "Relax", cost: 5, statChanges: { Happiness: 20 }, duration: 2000 },
+export const activityZones = {
+  Beach: [
+    { name: "Swim Spot", x: 100, y: 100, radius: 40 },
+    { name: "Coconut Stand", x: 100, y: 200, radius: 40 },
+    { name: "Fish Spot", x: 200, y: 100, radius: 40 },
   ],
+  Home: [
+    { name: "Sleep Spot", x: 100, y: 100, radius: 40 },
+    { name: "Relax Spot", x: 100, y: 200, radius: 40 },
+  ],
+  City: [
+    { name: "Work Spot", x: 100, y: 100, radius: 40 },
+    { name: "Shop", x: 100, y: 200, radius: 40 },
+  ],
+  Forest: [
+    { name: "Gather Spot", x: 100, y: 100, radius: 40 },
+    { name: "Rest Area", x: 100, y: 200, radius: 40 },
+  ],
+};
+
+export const areaActivities = {
   Beach: [
     {
       name: "Swim",
-      cost: 10,
-      statChanges: { Happiness: 20, Sleep: -10 },
+      cost: 0,
       duration: 2000,
+      statChanges: { Happiness: 10, Cleanliness: -5 },
     },
     {
-      name: "Eat",
-      cost: 15,
-      statChanges: { Meal: 20, Cleanliness: -5 },
-      duration: 2000,
+      name: "Coconut Stand",
+      cost: 10,
+      duration: 1000,
+      statChanges: { Meal: 10, Money: -10 },
     },
     {
       name: "Fish",
       cost: 0,
-      statChanges: { Money: 20, Meal: -5 },
-      duration: 2000,
+      duration: 3000,
+      statChanges: { Happiness: 5, Meal: 5 },
       requiredItems: ["Fishing Rod"],
     },
   ],
+  Home: [
+    {
+      name: "Sleep",
+      cost: 0,
+      duration: 3000,
+      statChanges: { Sleep: 20, Happiness: 5 },
+    },
+    {
+      name: "Relax",
+      cost: 0,
+      duration: 2000,
+      statChanges: { Happiness: 10, Sleep: 5 },
+    },
+  ],
   City: [
+    {
+      name: "Work",
+      cost: 0,
+      duration: 4000,
+      statChanges: { Money: 20, Happiness: -5, Sleep: -10 },
+    },
     {
       name: "Shop",
       cost: 0,
-      duration: 1000,
+      duration: 0,
       shopItems: [
-        { name: "Pegasus Apple", cost: 20 },
-        { name: "Fishing Rod", cost: 30 },
-        { name: "Baby", cost: 50 },
+        { name: "Pegasus Apple", cost: 30 },
+        { name: "Fishing Rod", cost: 50 },
       ],
     },
-    { name: "Work", cost: 0, statChanges: { Money: 30 }, duration: 2000 },
   ],
   Forest: [
-    {
-      name: "Rest",
-      cost: 5,
-      statChanges: { Sleep: 15, Happiness: 10 },
-      duration: 2000,
-    },
     {
       name: "Gather",
       cost: 0,
+      duration: 3000,
+      statChanges: { Happiness: 5, Meal: 5 },
       itemsGained: ["Broken Apple"],
-      duration: 1000,
+      requiredItems: ["Pegasus Apple"],
     },
-  ],
-};
-
-export const activityZones = {
-  Home: [
-    { name: "Sleep Spot", x: 100, y: 100, radius: 20 },
-    { name: "Relax Spot", x: 150, y: 100, radius: 20 },
-  ],
-  Beach: [
-    { name: "Swim Spot", x: 700, y: 150, radius: 20 },
-    { name: "Coconut Stand", x: 750, y: 200, radius: 20 },
-    { name: "Fish Spot", x: 680, y: 130, radius: 20 },
-  ],
-  City: [
-    { name: "Shop", x: 400, y: 400, radius: 20 },
-    { name: "Work Spot", x: 450, y: 400, radius: 20 },
-  ],
-  Forest: [
-    { name: "Rest Area", x: 200, y: 500, radius: 20 },
-    { name: "Gather Spot", x: 250, y: 500, radius: 20 },
+    {
+      name: "Rest Area",
+      cost: 0,
+      duration: 2000,
+      statChanges: { Sleep: 10, Happiness: 5 },
+    },
   ],
 };
 
 export const itemEffects = {
-  "Pegasus Apple": { statChanges: { Happiness: 20 } },
-  "Broken Apple": { statChanges: { Meal: 10 } },
-  "Fishing Rod": { unlocks: { Beach: ["Fish"] } },
-  Baby: { statChanges: { Happiness: 30 } },
+  "Pegasus Apple": {
+    statChanges: { Happiness: 20, Meal: 10 },
+  },
+  "Broken Apple": {
+    statChanges: { Meal: 5 },
+  },
+  "Fishing Rod": {
+    unlocks: ["Fish"],
+  },
+};
+
+export const calculateLifeSatisfaction = (stats, visitedAreas) => {
+  const statBalance =
+    ((stats?.Meal || 0) +
+      (stats?.Sleep || 0) +
+      (stats?.Happiness || 0) +
+      (stats?.Cleanliness || 0)) /
+    4;
+  const scaledStatBalance = (statBalance / 100) * 50;
+  const activityBonus = Math.min((stats?.activitiesPerformed || 0) * 2, 40);
+  const itemBonus =
+    (stats?.Items?.length || 0) * 1 + (stats?.totalItemsUsed || 0) * 2;
+  const scaledItemBonus = Math.min(itemBonus, 30);
+  const areaVarietyBonus = Math.min(
+    new Set(Array.isArray(visitedAreas) ? visitedAreas : []).size * 5,
+    20
+  );
+  const totalScore = Math.floor(
+    scaledStatBalance + activityBonus + scaledItemBonus + areaVarietyBonus
+  );
+
+  console.log("Life Satisfaction calculated:", {
+    scaledStatBalance,
+    activityBonus,
+    scaledItemBonus,
+    areaVarietyBonus,
+    totalScore,
+  });
+
+  return {
+    total: totalScore,
+    details: {
+      "Stat Balance": scaledStatBalance,
+      Activities: activityBonus,
+      "Items Collected & Used": scaledItemBonus,
+      "Area Variety": areaVarietyBonus,
+    },
+  };
+};
+
+export const getLifeSatisfactionMessage = (score) => {
+  if (score >= 80) {
+    return "Kamu sangat bahagia! Terus pertahankan gaya hidup sehatmu!";
+  } else if (score >= 60) {
+    return "Kamu cukup bahagia, tapi masih bisa lebih baik. Coba eksplorasi area baru!";
+  } else if (score >= 40) {
+    return "Kamu perlu meningkatkan keseimbangan hidupmu. Coba lakukan lebih banyak aktivitas!";
+  } else {
+    return "Kamu terlihat tidak bahagia. Pertimbangkan untuk beristirahat dan fokus pada kebutuhan dasar!";
+  }
 };

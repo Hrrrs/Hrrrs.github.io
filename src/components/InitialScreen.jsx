@@ -136,11 +136,10 @@ const InitialScreen = ({ onStart }) => {
           />
           <input
             type="text"
-            color="black"
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Masukkan nama (misalnya, Bocchi)"
-            className="p-2 border border-gray-300 rounded-lg w-64 focus:outline-none focus:ring-2 focus:ring-purple-300 mb-4 mt-4"
+            className="p-2 border border-gray-300 rounded-lg w-64 focus:outline-none focus:ring-2 focus:ring-purple-300 mb-4 mt-4 text-black"
           />
           <button
             onClick={handleStart}
